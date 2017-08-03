@@ -1,7 +1,7 @@
 module.exports = (rules) => {
   const top_level    = rules.split('->').map((t) => t.trim())
   const total_volume = parseInt(top_level[1], 10)
-  const out          = { total_volume }
+  const out          = { }
 
   let cumulative_percent = 0
 

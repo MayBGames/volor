@@ -1,9 +1,10 @@
 #! /usr/bin/env node
 
 const args  = require('./params')
-const rules = require('./rule_parser')(args.biom.rules)
+const parse = require('./rule_parser')
+const rules = parse(args.biom.rules)
 
-// console.log('\nBIOM', rules)
+rules.total_volume = args.biom.total_volume
 
 let remaining_volume = rules.total_volume
 
@@ -34,19 +35,21 @@ template
 
 const masks   = [ ]
 let   matches = [ ]
+const mask_effects = { }
 
 mask
   .split(',')
   .map(m => m.trim())
   .forEach(m => {
-    masks.push(m.split(''))
+    const tokens = m.split('=').map(i => i.trim())
+
+    masks.push(tokens[0].split(''))
     matches.push([ ])
+
+    mask_effects[tokens[0]] = tokens[1].split('')
   })
 
 const aliases = Object.keys(temp)
-
-// console.log('temp', temp)
-// console.log('masks', masks)
 
 const role = () => {
   const seed       = Math.random()
@@ -92,8 +95,7 @@ while (remaining_volume > 0) {
   role()
 }
 
-let first_match_found = { }
-let previous_run      = undefined
+let previous_run = undefined
 
 const last = (arr) => arr[arr.length - 1]
 
@@ -114,8 +116,6 @@ map.forEach((x, i) => {
 
   let found_match = false
 
-  // console.log('matched aliases', as)
-
   masks.forEach((mask, j) => {
     const key = mask.join('')
 
@@ -125,40 +125,29 @@ map.forEach((x, i) => {
       const aindex = as.indexOf(m)
 
       if (aindex > -1) {
-        if (first_match_found[key] === true                 &&
-            mindex                 === last(current).length &&
-            previous_run           === i - 1                &&
-            mindex                 >   0                    &&
-            last(last(current))    === i - 1) {
-          last(current).push(i)
-          // console.log('next match', m, i, previous_run, mindex)
+        let lst = last(current)
 
-          found_match = true
-        } else if (first_match_found[key] === undefined && mindex === 0) {
+        if (mindex === 0) {
           current.push([ i ])
 
-          // console.log('first match', m, i, previous_run, mindex)
-
-          first_match_found[key] = true
-
           found_match = true
-        } else if (first_match_found[key] === true  &&
-                   previous_run           === i - 1 &&
-                   mindex                 === 0     &&
-                   last(current).length   === 1) {
-          let mod = last(current)
+        } else if (Array.isArray(lst) && previous_run === i - 1) {
+          if (mindex    === lst.length &&
+              mindex    >   0          &&
+              last(lst) === i - 1) {
+            lst.push(i)
 
-          mod[0] = i
+            found_match = true
+          } else if (mindex      === 0 &&
+                     lst.length  === 1 &&
+                     mask.length >   1) {
+            lst[0] = i
 
-          found_match = true
-
-          // console.log('other', m, i, previous_run, mindex, first_match_found[key])
+            found_match = true
+          }
         }
       } else if (as.length === 0 || i - previous_run > 1) {
-        // console.log('no matching aliases', m, i, previous_run, mindex)
-
-        first_match_found[key] = undefined
-        previous_run           = undefined
+        previous_run = undefined
 
         let modify = last(current)
 
@@ -167,7 +156,6 @@ map.forEach((x, i) => {
         found_match = false
       }
     })
-    // console.log('CURRENT', mask.join(''), current)
   })
 
   if (found_match) {
@@ -197,6 +185,57 @@ masks.forEach((mask, i) => {
   })
 })
 
+console.log('aliases', aliases)
 console.log('matches', full_matches)
 
-// console.log('\nMAP', map)
+const effects = { }
+
+args.biom.transform.effects
+  .split(',')
+  .map(e => {
+    const tokens = e.split('=')
+      .map(t => t.trim())
+
+    const template = tokens[0]
+    const effect   = tokens[1]
+
+    effects[template] = parse(effect)
+  })
+
+const keys = Object.keys(full_matches)
+
+const deep_update = (src, mod) => {
+  let   out  = Object.assign({ }, src)
+  let   eff  = Object.assign({ }, mod)
+  const keys = Object.keys(eff)
+
+  keys.forEach(k => {
+    if (typeof out[k] === 'undefined') {
+      out[k] = Object.assign({ }, eff[k])
+    } else {
+      if (Array.isArray(eff[k]) === false && typeof eff[k] === 'object') {
+        out[k] = deep_update(out[k], eff[k])
+      } else {
+        out[k] = parseFloat(out[k]) + eff[k]
+      }
+    }
+  })
+
+  return out
+}
+
+keys.forEach(k => {
+  full_matches[k].forEach(m => {
+    m.forEach((i, idx) => {
+      const index = mask_effects[k][idx]
+
+      map[i] = Object.assign({ }, deep_update(map[i], effects[index]))
+    })
+  })
+})
+
+map.forEach((m, i) => {
+  if (m.ground) {
+    console.log('\nTILE', i, m.ground)
+  }
+})
