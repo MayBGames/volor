@@ -2,11 +2,9 @@
 
 const args  = require('./params')
 const parse = require('./rule_parser')
-const rules = parse(args.biom.rules)
+const rules = args.biom.path
 
-rules.total_volume = args.biom.total_volume
-
-let remaining_volume = rules.total_volume
+let remaining_volume = args.biom.total_volume
 
 let previous_dir = undefined
 let map          = [ ]
@@ -15,75 +13,103 @@ const { direction_allowed, properties } = args.biom
 
 const tests = Object.keys(properties)
 
-const roundedRandomIn = (range) => {
-  return Math.round(Math.random() * (range.max - range.min) + range.min)
+const randomIn = (r) => Math.random() * (r.max - r.min) + r.min
+
+const roundedRandomIn = (r) => Math.round(randomIn(r))
+
+const { property_sets, filter_sets } = args.biom.tiles
+
+const directions = Object.keys(rules)
+
+let direction_chance = 0
+let option_chance    = 0
+
+for (let d = 0; d < directions.length; d++) {
+  const dir = directions[d]
+
+  let dir_chance    = parseFloat(rules[dir].chance)
+  let dir_decorated = {
+    min: direction_chance,
+    val: dir_chance,
+    max: direction_chance + dir_chance
+  }
+
+  direction_chance += dir_decorated.val
+
+  rules[dir].chance = dir_decorated
+
+  const options = rules[dir].options
+
+  for (let o = 0; o < options.length; o++) {
+    const option = options[o]
+
+    let opt_chance    = parseFloat(option.chance)
+    let opt_decorated = {
+      min: option_chance,
+      val: opt_chance,
+      max: option_chance + opt_chance
+    }
+
+    option_chance += opt_decorated.val
+
+    option.chance = opt_decorated
+  }
 }
 
-const { template, mask } = args.biom.transform
-
-const temp = { }
-
-template
-  .split(',')
-  .map(t => t.trim())
-  .forEach(t => {
-    let   tokens = t.split(':').map((t) => t.trim())
-    const alias  = tokens.shift()
-
-    temp[alias] = tokens
-  })
-
-const masks   = [ ]
-let   matches = [ ]
-const mask_effects = { }
-
-mask
-  .split(',')
-  .map(m => m.trim())
-  .forEach(m => {
-    const tokens = m.split('=').map(i => i.trim())
-
-    masks.push(tokens[0].split(''))
-    matches.push([ ])
-
-    mask_effects[tokens[0]] = tokens[1].split('')
-  })
-
-const aliases = Object.keys(temp)
-
 const role = () => {
-  const seed       = Math.random()
-  const directions = Object.keys(rules).filter((d) => d !== 'total_volume')
+  const direction_seed = randomIn({ min: 0, max: direction_chance })
 
-  for (let dir of directions) {
-    if (seed >= rules[dir].percent.min && seed <= rules[dir].percent.max) {
+  for (let d = 0; d < directions.length; d++) {
+    const dir    = directions[d]
+    const chance = rules[dir].chance
+
+    if (direction_seed >= chance.min && direction_seed <= chance.max) {
       if (direction_allowed(dir, previous_dir)) {
-        const width  = roundedRandomIn(rules[dir].width_range)
-        const height = roundedRandomIn(rules[dir].height_range)
-        const volume = width * height
+        const inner_seed = randomIn({ min: 0, max: option_chance })
+        const options    = rules[dir].options
 
-        const tile = {
-          direction: dir,
-          height:    height,
-          width:     width,
-          x:         rules[dir].width_range,
-          y:         rules[dir].height_range
-        }
+        for (let o = 0; o < options.length; o++) {
+          const option = options[o]
 
-        const props = [ ]
+          if (inner_seed >= option.chance.min && inner_seed <= option.chance.max) {
+            const width  = roundedRandomIn(option.width)
+            const height = roundedRandomIn(option.height)
+            const volume = width * height
 
-        for (let test of tests) {
-          if (properties[test](tile.width, tile.height, tile.x, tile.y)) {
-            props.push(test)
+            const tile = {
+              direction: dir,
+              height:    {
+                min:    rules[dir].height.min,
+                max:    rules[dir].height.max,
+                actual: height
+              },
+              width: {
+                min:    rules[dir].width.min,
+                max:    rules[dir].width.max,
+                actual: width
+              }
+            }
+
+            const props = [ ]
+
+            for (let test of tests) {
+              if (properties[test](tile.width, tile.height)) {
+                props.push(test)
+              }
+            }
+
+            tile.props = props
+
+            remaining_volume -= volume
+            previous_dir      = dir
+
+            map.push(tile)
+
+            break
           }
         }
 
-        tile.props = props
-
-        remaining_volume -= volume
-        previous_dir      = dir
-
-        map.push(tile)
+        break
       } else {
         role()
       }
@@ -95,58 +121,72 @@ while (remaining_volume > 0) {
   role()
 }
 
-let previous_run = undefined
-
 const last = (arr) => arr[arr.length - 1]
 
-map.forEach((x, i) => {
-  const as = aliases.map(a => {
-    let hits = 0
+const matches = Object.keys(filter_sets).map(f => [ ])
 
-    temp[a].forEach(t => {
-      if (x.props.includes(t)) {
+let previous_run = undefined
+
+map.forEach((x, i) => {
+  const properties    = Object.keys(property_sets)
+  const matched_props = [ ]
+
+  for (let z = 0; z < properties.length; z++) {
+    const prop = properties[z]
+    const set  = property_sets[prop]
+    let   hits = 0
+
+    for (let y = 0; y < set.length; y++) {
+      const s = set[y]
+
+      if (x.props.includes(s)) {
         ++hits
       }
-    })
-
-    if (hits === temp[a].length) {
-      return a
     }
-  }).filter(a => typeof a !== 'undefined')
+
+    if (hits === set.length) {
+      matched_props.push(prop)
+    }
+  }
 
   let found_match = false
 
-  masks.forEach((mask, j) => {
-    const key = mask.join('')
+  const filters = Object.keys(filter_sets)
 
-    let current = matches[j]
+  for (let w = 0; w < filters.length; w++) {
+    const filter_name  = filters[w]
+    const filter       = filter_sets[filters[w]]
+    const requirements = [ ]
+    const current      = matches[w]
 
-    mask.forEach((m, mindex) => {
-      const aindex = as.indexOf(m)
+    for (let v = 0; v < filter.length; v++) {
+      const f      = filter[v]
+      const key    = Object.keys(f)[0]
+      const aindex = matched_props.indexOf(key)
 
       if (aindex > -1) {
         let lst = last(current)
 
-        if (mindex === 0) {
+        if (v === 0) {
           current.push([ i ])
 
           found_match = true
         } else if (Array.isArray(lst) && previous_run === i - 1) {
-          if (mindex    === lst.length &&
-              mindex    >   0          &&
+          if (v         === lst.length &&
+              v         >   0          &&
               last(lst) === i - 1) {
             lst.push(i)
 
             found_match = true
-          } else if (mindex      === 0 &&
-                     lst.length  === 1 &&
-                     mask.length >   1) {
+          } else if (v             === 0 &&
+                     lst.length    === 1 &&
+                     filter.length >   1) {
             lst[0] = i
 
             found_match = true
           }
         }
-      } else if (as.length === 0 || i - previous_run > 1) {
+      } else if (matched_props.length === 0 || i - previous_run > 1) {
         previous_run = undefined
 
         let modify = last(current)
@@ -155,52 +195,38 @@ map.forEach((x, i) => {
 
         found_match = false
       }
-    })
-  })
+    }
+  }
 
   if (found_match) {
     previous_run = i
   }
 })
 
+
 const full_matches = { }
 
-masks.forEach((mask, i) => {
-  const key = mask.join('')
+const filters = Object.keys(filter_sets)
 
+filters.forEach((filter, i) => {
   matches[i].forEach((match) => {
     let fully_matches = true
 
-    if (match.length !== mask.length) {
+    if (match.length !== filter_sets[filter].length) {
       fully_matches = false
     }
 
     if (fully_matches) {
-      if (typeof full_matches[key] === 'undefined') {
-        full_matches[key] = [ ]
+      if (typeof full_matches[filter] === 'undefined') {
+        full_matches[filter] = [ ]
       }
 
-      full_matches[key].push(match)
+      full_matches[filter].push(match)
     }
   })
 })
 
-console.log('aliases', aliases)
-console.log('matches', full_matches)
-
-const effects = { }
-
-args.biom.transform.effects
-  .split(',')
-  .map(e => {
-    const tokens = e.split('=')
-      .map(t => t.trim())
-
-    const template = tokens[0]
-    const effect   = tokens[1]
-
-    effects[template] = parse(effect)
-  })
+// console.log('matches', full_matches)
 
 const keys = Object.keys(full_matches)
 
@@ -227,15 +253,34 @@ const deep_update = (src, mod) => {
 keys.forEach(k => {
   full_matches[k].forEach(m => {
     m.forEach((i, idx) => {
-      const index = mask_effects[k][idx]
+      const filter = args.biom.tiles.filter_sets[k]
 
-      map[i] = Object.assign({ }, deep_update(map[i], effects[index]))
+      for (let k = 0; k < filter.length; k++) {
+        const f    = filter[k]
+        const keys = Object.keys(f)
+
+        for (let l = 0; l < keys.length; l++) {
+          const key      = keys[l]
+          const to_apply = f[key]
+
+          for (let m = 0; m < to_apply.length; m++) {
+            const apply   = to_apply[m]
+            const effects = Object.keys(args.biom.tiles.effect_sets[apply])
+
+            for (let j = 0; j < effects.length; j++) {
+              const effect = { [effects[j]]: args.biom.tiles.effect_sets[apply][effects[j]] }
+
+              map[i] = Object.assign({ }, deep_update(map[i], effect))
+            }
+          }
+        }
+      }
     })
   })
 })
 
 map.forEach((m, i) => {
-  if (m.ground) {
-    console.log('\nTILE', i, m.ground)
+  if (m.stairs_up || m.ground) {
+    console.log('\nTILE', i, m)
   }
 })
