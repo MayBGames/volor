@@ -87,7 +87,21 @@ const role = () => {
                 min:    rules[dir].width.min,
                 max:    rules[dir].width.max,
                 actual: width
+              },
+              grid: [ ]
+            }
+
+            let w = 0
+
+            while (w++ < width) {
+              let row = [ ]
+              let h   = 0
+
+              while (h++ < height) {
+                row.push([ ])
               }
+
+              tile.grid.push(row)
             }
 
             const props = [ ]
@@ -123,7 +137,7 @@ while (remaining_volume > 0) {
 
 const last = (arr) => arr[arr.length - 1]
 
-const matches = Object.keys(filter_sets).map(f => [ ])
+const matches = Object.keys(filter_sets.landscape).map(f => [ ])
 
 let previous_run = undefined
 
@@ -151,11 +165,11 @@ map.forEach((x, i) => {
 
   let found_match = false
 
-  const filters = Object.keys(filter_sets)
+  const filters = Object.keys(filter_sets.landscape)
 
   for (let w = 0; w < filters.length; w++) {
     const filter_name  = filters[w]
-    const filter       = filter_sets[filters[w]]
+    const filter       = filter_sets.landscape[filters[w]]
     const requirements = [ ]
     const current      = matches[w]
 
@@ -203,16 +217,15 @@ map.forEach((x, i) => {
   }
 })
 
-
 const full_matches = { }
 
-const filters = Object.keys(filter_sets)
+const filters = Object.keys(filter_sets.landscape)
 
 filters.forEach((filter, i) => {
   matches[i].forEach((match) => {
     let fully_matches = true
 
-    if (match.length !== filter_sets[filter].length) {
+    if (match.length !== filter_sets.landscape[filter].length) {
       fully_matches = false
     }
 
@@ -236,7 +249,7 @@ const deep_update = (src, mod) => {
   const keys = Object.keys(eff)
 
   keys.forEach(k => {
-    if (typeof out[k] === 'undefined') {
+    if (out[k] === undefined) {
       out[k] = Object.assign({ }, eff[k])
     } else {
       if (Array.isArray(eff[k]) === false && typeof eff[k] === 'object') {
@@ -250,10 +263,16 @@ const deep_update = (src, mod) => {
   return out
 }
 
+const { DEFAULT } = args.biom.tiles.effect_sets.landscape
+
+for (let i = 0; i < map.length; i++) {
+  map[i].landscape = DEFAULT
+}
+
 keys.forEach(k => {
   full_matches[k].forEach(m => {
     m.forEach((i, idx) => {
-      const filter = args.biom.tiles.filter_sets[k]
+      const filter = args.biom.tiles.filter_sets.landscape[k]
 
       for (let k = 0; k < filter.length; k++) {
         const f    = filter[k]
@@ -265,12 +284,12 @@ keys.forEach(k => {
 
           for (let m = 0; m < to_apply.length; m++) {
             const apply   = to_apply[m]
-            const effects = Object.keys(args.biom.tiles.effect_sets[apply])
+            const effects = Object.keys(args.biom.tiles.effect_sets.landscape[apply])
 
             for (let j = 0; j < effects.length; j++) {
-              const effect = { [effects[j]]: args.biom.tiles.effect_sets[apply][effects[j]] }
+              const effect = { [effects[j]]: args.biom.tiles.effect_sets.landscape[apply][effects[j]] }
 
-              map[i] = Object.assign({ }, deep_update(map[i], effect))
+              map[i].landscape = Object.assign({ }, deep_update(map[i].landscape, effect))
             }
           }
         }
@@ -279,8 +298,76 @@ keys.forEach(k => {
   })
 })
 
-map.forEach((m, i) => {
-  if (m.stairs_up || m.ground) {
-    console.log('\nTILE', i, m)
+for (let i = 0; i < map.length; i++) {
+  const m    = map[i]
+  const land = Object.keys(m.landscape)
+
+  let land_chance = 0
+
+  for (let j = 0; j < land.length; j++) {
+    let chance    = parseFloat(m.landscape[land[j]].chance)
+    let land_decorated = {
+      min: land_chance,
+      val: chance,
+      max: land_chance + chance
+    }
+
+    land_chance += land_decorated.val
+
+    m.landscape[land[j]].chance = land_decorated
   }
+
+  let x = 0
+  let y = 0
+
+  while (x < m.width.actual) {
+    const seed = randomIn({ min: 0, max: land_chance })
+
+    for (let j = 0; j < land.length; j++) {
+      const l = land[j]
+
+      if (seed >= m.landscape[l].chance.min && seed <= m.landscape[l].chance.max) {
+        const settings = args.biom.landscape[l]
+
+        const width  = roundedRandomIn(settings.width)
+        const start  = x
+
+        let height  = roundedRandomIn(settings.height)
+        let runs    = x + width
+        let counter = start
+
+        if (x + width > m.width.actual) {
+          runs -= (x + width) - m.width.actual
+        }
+
+        if (y + height > m.height.actual) {
+          y -= (y + height) - m.height.actual
+        }
+
+        if (l === 'ground' && y > 2) {
+          y -= 2
+        }
+
+        while (counter < runs) {
+          let h = 0
+
+          while(h < height) {
+            m.grid[counter][y + h++].push(l)
+          }
+
+          ++counter
+        }
+
+        x = runs
+
+        if (l === 'stairs_up') {
+          y += height
+        }
+      }
+    }
+  }
+}
+
+map.forEach((m, i) => {
+  console.log('\nTILE', i, m)
 })

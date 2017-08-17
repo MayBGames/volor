@@ -1,10 +1,11 @@
 module.exports = {
   biom: {
+    pipeline: [ 'path', 'tiles', 'landscape' ],
     path: {
       right: {
         chance: 70,
-        width:  { min: 10, max: 20  },
-        height: { min: 10, max: 20  },
+        width:  { min: 10, max: 20 },
+        height: { min: 10, max: 20 },
         options: [
           {
             chance: 100,
@@ -15,8 +16,8 @@ module.exports = {
       },
       up: {
         chance: 30,
-        width:  { min:  10, max: 20 },
-        height: { min:  10, max: 20 },
+        width:  { min: 10, max: 20 },
+        height: { min: 10, max: 20 },
         options: [
           {
             chance: 100,
@@ -35,29 +36,26 @@ module.exports = {
         tall: [ 'is_tall'       ]
       },
       effect_sets: {
-        more_ground_less_stairs: {
-          ground:    { chance: +20 },
-          stairs_up: { chance: -20 }
-        },
-        more_stairs_less_ground: {
-          ground:    { chance: -20 },
-          stairs_up: { chance: +20 }
-        },
-        // c: {
-        //   ground: {
-        //     width: {
-        //       min: -10,
-        //       max: -10
-        //     },
-        //     height: {
-        //       max: 20
-        //     }
-        //   }
-        // }
+        landscape: {
+          DEFAULT: {
+            ground:    { chance: 50 },
+            stairs_up: { chance: 50 }
+          },
+          more_ground_less_stairs: {
+            ground:    { chance: +40 },
+            stairs_up: { chance: -30 }
+          },
+          more_stairs_less_ground: {
+            ground:    { chance: -40 },
+            stairs_up: { chance: +40 }
+          },
+        }
       },
       filter_sets: {
-        ground: [{ flat: [ 'more_ground_less_stairs' ] }],
-        stairs: [{ tall: [ 'more_stairs_less_ground' ] }],
+        landscape: {
+          ground: [{ flat: [ 'more_ground_less_stairs' ] }],
+          stairs: [{ tall: [ 'more_stairs_less_ground' ] }]
+        }
         // double: [
         //   { flat:   [ 'a' ] },
         //   { skinny: [ 'a' ] }
@@ -68,22 +66,21 @@ module.exports = {
         // ]
       }
     },
-    landscapes: {
-      // ground:      () => { },
+    landscape: {
       ground: {
-        width: { min: 1, max: 8 }
+        width:  { min: 2, max: 8 },
+        height: { min: 2, max: 2 }
       },
-      // stairs_up:   () => { },
       stairs_up: {
-        steps: { min: 3, max: 9 },
-        delta: { min: 1, max: 4 }
+        width:  { min: 2, max: 6 },
+        height: { min: 2, max: 6 },
+        steps:  { min: 3, max: 9 },
+        delta:  { min: 1, max: 4 }
       },
       stairs_down: {
         steps: { min: 3, max: 9 },
         delta: { min: 1, max: 4 }
       },
-      // stairs_down: () => { },
-      // slope_up:    () => { },
       slope_up: {
         width: { min: 4, max: 8 },
         delta: { min: 1, max: 4 }
@@ -92,8 +89,6 @@ module.exports = {
         width: { min: 4, max: 8 },
         delta: { min: 1, max: 4 }
       }
-      // slope_down:  () => { },
-      // spring:      () => { }
     },
     platforms: {
       stationary: () => { },
