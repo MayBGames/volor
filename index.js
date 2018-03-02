@@ -1,12 +1,12 @@
 module.exports = (name, total_volume, pipeline) => {
-  const level = require('./lib/builder')(name, total_volume, pipeline)
+  const recipe = require('./lib/builder')(name, total_volume, pipeline)
 
-  for (let pipe of level.pipeline) {
-    require(`./recipies/${level.name}/delegates/${pipe}`)(level)
+  for (let pipe of recipe.pipeline) {
+    require(`./recipies/${recipe.name}/delegates/${pipe}`)(recipe)
   }
 
-  delete level.properties
-  delete level.direction_allowed
+  delete recipe.properties
+  delete recipe.direction_allowed
 
-  return level
+  return recipe
 }
