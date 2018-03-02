@@ -1,4 +1,14 @@
 module.exports = {
+  "meta": {
+    "reserved": [ "weights" ],
+    "render_order": [
+      "ground",
+      "stairs_up",
+      "stairs_down",
+      "slope_up",
+      "slope_down"
+    ]
+  },
   "ground": {
     "width":  { "min": 2, "max": 8, "step": 1 },
     "height": { "min": 2, "max": 2, "step": 1 },
