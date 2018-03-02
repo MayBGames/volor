@@ -6,6 +6,6 @@ module.exports = (level) => {
   tiles.generated = [ ]
 
   for (let step of path.generated) {
-    tiles.generated.push(parser(tiles.config, step.props))
+    tiles.generated.push(parser(tiles, step.props))
   }
 }
