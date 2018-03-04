@@ -65,3 +65,6 @@ render pipeline
 The delegates and configs are organized by the `render_pipeline`. The `render_pipeline` specifies what delegates to execute, and the order to execute them.
 
 **NOTE** _Order of delegate execution matters_
+
+_MORE TO COME_
+==============
